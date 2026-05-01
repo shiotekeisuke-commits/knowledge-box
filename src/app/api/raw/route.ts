@@ -9,9 +9,17 @@ export async function GET() {
     const sheets = google.sheets({ version: "v4", auth });
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.SPREADSHEET_ID,
-      range: `'📋 未契約・アップセル分析'!A1:Z10`,
+      range: `'📋 未契約・アップセル分析'!A5:AV6`,
     });
-    return NextResponse.json({ rows: res.data.values });
+    const rows = res.data.values ?? [];
+    const headers = rows[0] ?? [];
+    const sample = rows[1] ?? [];
+    const result: Record<string, string> = {};
+    headers.forEach((h: string, i: number) => {
+      const col = i < 26 ? String.fromCharCode(65 + i) : "A" + String.fromCharCode(65 + i - 26);
+      result[`${col}列(${h})`] = sample[i] ?? "";
+    });
+    return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
   }

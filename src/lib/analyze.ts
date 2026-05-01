@@ -5,6 +5,8 @@ export type FilterParams = {
   年齢区分?: string;
   顧客タイプ?: string;
   婚姻?: string;
+  CP名?: string;
+  職業?: string;
 };
 
 export type Stats = {
@@ -21,6 +23,8 @@ export function filterRows(rows: CaseRow[], params: FilterParams): CaseRow[] {
     if (params.年齢区分 && r.年齢区分 !== params.年齢区分) return false;
     if (params.顧客タイプ && r.顧客タイプ !== params.顧客タイプ) return false;
     if (params.婚姻 && r.婚姻 !== params.婚姻) return false;
+    if (params.CP名 && r.CP名 !== params.CP名) return false;
+    if (params.職業 && r.職業 !== params.職業) return false;
     return true;
   });
 }
@@ -33,7 +37,7 @@ function topN(arr: string[], n = 3): { label: string; count: number; pct: number
     if (!v || EXCLUDE_REASONS.has(v)) continue;
     map[v] = (map[v] ?? 0) + 1;
   }
-  const total = arr.length || 1;
+  const total = arr.filter(v => v && !EXCLUDE_REASONS.has(v)).length || 1;
   return Object.entries(map)
     .sort((a, b) => b[1] - a[1])
     .slice(0, n)
@@ -41,13 +45,14 @@ function topN(arr: string[], n = 3): { label: string; count: number; pct: number
 }
 
 export function calcStats(allRows: CaseRow[], filtered: CaseRow[]): Stats {
+  void allRows;
   const total = filtered.length;
   const contracted = filtered.filter(r => r.契約状況 && r.契約状況 !== "未契約").length;
   const contractRate = total > 0 ? Math.round((contracted / total) * 100) : 0;
 
-  const nonContracted = filtered.filter(r => r.契約状況 !== "契約");
+  const nonContracted = filtered.filter(r => r.契約状況 === "未契約");
   const reasons = topN(nonContracted.map(r => r.未契約理由1));
-  const contractedRows = filtered.filter(r => r.契約状況 === "契約");
+  const contractedRows = filtered.filter(r => r.契約状況 !== "未契約");
   const approaches = topN(contractedRows.map(r => r.着地アプローチ));
 
   let suggestion = "";
@@ -71,7 +76,17 @@ export function getUniqueValues(rows: CaseRow[], key: keyof CaseRow): string[] {
   const s = new Set<string>();
   for (const r of rows) {
     const v = String(r[key]);
-    if (v) s.add(v);
+    if (v && v !== "その他") s.add(v);
   }
   return Array.from(s).sort();
 }
+
+// CP名は固定リスト（その他は除外）
+export const CP_OPTIONS = [
+  "ヒゲ総額",
+  "ヒゲトライアル",
+  "6ヶ月",
+  "無料カウンセリング",
+  "全身脱毛トライアル",
+  "現金キャッシュバック",
+];

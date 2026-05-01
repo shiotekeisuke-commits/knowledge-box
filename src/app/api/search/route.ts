@@ -10,6 +10,8 @@ export async function GET(req: NextRequest) {
       年齢区分: sp.get("年齢区分") || undefined,
       顧客タイプ: sp.get("顧客タイプ") || undefined,
       婚姻: sp.get("婚姻") || undefined,
+      CP名: sp.get("CP名") || undefined,
+      職業: sp.get("職業") || undefined,
     };
 
     const all = await fetchAllRows();

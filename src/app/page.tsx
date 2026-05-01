@@ -9,6 +9,8 @@ type Options = {
   年齢区分: string[];
   顧客タイプ: string[];
   婚姻: string[];
+  CP名: string[];
+  職業: string[];
 };
 
 type Filters = {
@@ -16,6 +18,8 @@ type Filters = {
   年齢区分: string;
   顧客タイプ: string;
   婚姻: string;
+  CP名: string;
+  職業: string;
 };
 
 type Stats = {
@@ -34,10 +38,12 @@ const DEFAULT_FILTERS: Filters = {
   年齢区分: "",
   顧客タイプ: "",
   婚姻: "",
+  CP名: "",
+  職業: "",
 };
 
 export default function Home() {
-  const [options, setOptions] = useState<Options>({ 脱毛経験: [], 年齢区分: [], 顧客タイプ: [], 婚姻: [] });
+  const [options, setOptions] = useState<Options>({ 脱毛経験: [], 年齢区分: [], 顧客タイプ: [], 婚姻: [], CP名: [], 職業: [] });
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [stats, setStats] = useState<Stats | null>(null);
   const [cases, setCases] = useState<CaseRow[]>([]);
@@ -61,6 +67,8 @@ export default function Home() {
       if (filters.年齢区分) sp.set("年齢区分", filters.年齢区分);
       if (filters.顧客タイプ) sp.set("顧客タイプ", filters.顧客タイプ);
       if (filters.婚姻) sp.set("婚姻", filters.婚姻);
+      if (filters.CP名) sp.set("CP名", filters.CP名);
+      if (filters.職業) sp.set("職業", filters.職業);
       const res = await fetch(`/api/search?${sp}`);
       const data = await res.json();
       setStats(data.stats);

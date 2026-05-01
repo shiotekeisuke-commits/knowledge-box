@@ -5,6 +5,8 @@ type Options = {
   年齢区分: string[];
   顧客タイプ: string[];
   婚姻: string[];
+  CP名: string[];
+  職業: string[];
 };
 
 type Filters = {
@@ -12,6 +14,8 @@ type Filters = {
   年齢区分: string;
   顧客タイプ: string;
   婚姻: string;
+  CP名: string;
+  職業: string;
 };
 
 type Props = {
@@ -22,21 +26,23 @@ type Props = {
   loading: boolean;
 };
 
-const LABELS: Record<keyof Filters, string> = {
-  脱毛経験: "A. 脱毛経験",
-  年齢区分: "B. 年齢区分",
-  顧客タイプ: "C. 顧客タイプ",
-  婚姻: "D. 婚姻状況",
-};
+const FILTER_CONFIG: { key: keyof Filters; label: string }[] = [
+  { key: "脱毛経験", label: "A. 脱毛経験" },
+  { key: "年齢区分", label: "B. 年齢区分" },
+  { key: "顧客タイプ", label: "C. 顧客タイプ" },
+  { key: "婚姻", label: "D. 婚姻状況" },
+  { key: "CP名", label: "E. 訴求（流入CP）" },
+  { key: "職業", label: "F. 職業" },
+];
 
 export default function FilterPanel({ options, filters, onChange, onSearch, loading }: Props) {
   return (
     <div className="bg-white rounded-2xl shadow-sm p-5 space-y-5">
       <h2 className="text-lg font-bold text-gray-800">顧客条件を選択</h2>
 
-      {(Object.keys(LABELS) as (keyof Filters)[]).map(key => (
+      {FILTER_CONFIG.map(({ key, label }) => (
         <div key={key}>
-          <p className="text-sm font-semibold text-gray-500 mb-2">{LABELS[key]}</p>
+          <p className="text-sm font-semibold text-gray-500 mb-2">{label}</p>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => onChange(key, "")}
@@ -48,7 +54,7 @@ export default function FilterPanel({ options, filters, onChange, onSearch, load
             >
               すべて
             </button>
-            {options[key].map(opt => (
+            {(options[key] ?? []).map(opt => (
               <button
                 key={opt}
                 onClick={() => onChange(key, opt)}
