@@ -72,11 +72,14 @@ export default function Home() {
       const res = await fetch(`/api/search?${sp}`);
       const data = await res.json();
       setStats(data.stats);
-      // 契約成功事例を上部に表示
+      // FB記載あり → 契約成功 → それ以外 の順に表示
       const sorted = [...data.cases].sort((a: CaseRow, b: CaseRow) => {
-        const aOk = a.契約状況 !== "未契約" ? 0 : 1;
-        const bOk = b.契約状況 !== "未契約" ? 0 : 1;
-        return aOk - bOk;
+        const score = (c: CaseRow) => {
+          if (c.AIボイス精査 && c.AIボイス精査.length > 30) return 0;
+          if (c.契約状況 !== "未契約") return 1;
+          return 2;
+        };
+        return score(a) - score(b);
       });
       setCases(sorted);
       setSearched(true);
