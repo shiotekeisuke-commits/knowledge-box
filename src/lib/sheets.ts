@@ -31,6 +31,7 @@ export type CaseRow = {
   来店きっかけQ1: string; // AA列
   脱毛希望部位: string;   // AH列
   来店理由AT: string;     // AT列
+  ツールレベル: string;   // AU列
 };
 
 // Y列CP名を代表カテゴリに変換
@@ -70,7 +71,7 @@ export async function fetchAllRows(): Promise<CaseRow[]> {
 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: process.env.SPREADSHEET_ID,
-    range: `'${sheetName}'!A5:AT`,
+    range: `'${sheetName}'!A5:AV`,
   });
 
   const raw = res.data.values ?? [];
@@ -105,6 +106,7 @@ export async function fetchAllRows(): Promise<CaseRow[]> {
     来店きっかけQ1: r[26] ?? "", // AA列 (index 26)
     脱毛希望部位: r[33] ?? "",   // AH列 (index 33)
     来店理由AT: r[45] ?? "",     // AT列 (index 45)
+    ツールレベル: r[46] ?? "",   // AU列 (index 46)
   })).filter(r => r.no !== "");
 
   cachedRows = rows;

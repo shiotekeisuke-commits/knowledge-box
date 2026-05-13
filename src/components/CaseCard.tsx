@@ -32,6 +32,7 @@ type Case = {
   来店きっかけQ1: string;
   脱毛希望部位: string;
   来店理由AT: string;
+  ツールレベル: string;
 };
 
 function isContracted(status: string) {

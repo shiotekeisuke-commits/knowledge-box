@@ -7,6 +7,9 @@ export type FilterParams = {
   婚姻?: string;
   CP名?: string;
   職業?: string;
+  契約状況?: string;
+  単価レンジ?: string;
+  ツールレベル?: string;
 };
 
 export type Stats = {
@@ -17,14 +20,44 @@ export type Stats = {
   suggestion: string;
 };
 
+// 単価レンジの定義
+export const PRICE_RANGES = [
+  { label: "¥0〜¥50,000",       min: 0,      max: 50000   },
+  { label: "¥50,000〜¥100,000", min: 50000,  max: 100000  },
+  { label: "¥100,000〜¥150,000",min: 100000, max: 150000  },
+  { label: "¥150,000〜¥300,000",min: 150000, max: 300000  },
+  { label: "¥300,000以上",       min: 300000, max: Infinity },
+];
+
+function priceOf(row: CaseRow): number {
+  const v = String(row.契約金額 ?? "").replace(/[^0-9]/g, "");
+  return v ? parseInt(v, 10) : -1;
+}
+
 export function filterRows(rows: CaseRow[], params: FilterParams): CaseRow[] {
   return rows.filter(r => {
-    if (params.脱毛経験 && r.脱毛経験 !== params.脱毛経験) return false;
-    if (params.年齢区分 && r.年齢区分 !== params.年齢区分) return false;
+    if (params.脱毛経験  && r.脱毛経験  !== params.脱毛経験)  return false;
+    if (params.年齢区分  && r.年齢区分  !== params.年齢区分)  return false;
     if (params.顧客タイプ && r.顧客タイプ !== params.顧客タイプ) return false;
-    if (params.婚姻 && r.婚姻 !== params.婚姻) return false;
-    if (params.CP名 && r.CP名 !== params.CP名) return false;
-    if (params.職業 && r.職業 !== params.職業) return false;
+    if (params.婚姻      && r.婚姻      !== params.婚姻)      return false;
+    if (params.CP名      && r.CP名      !== params.CP名)      return false;
+    if (params.職業      && r.職業      !== params.職業)      return false;
+    if (params.ツールレベル && r.ツールレベル !== params.ツールレベル) return false;
+
+    // 契約状況フィルター
+    if (params.契約状況 === "契約"  && r.契約状況 === "未契約") return false;
+    if (params.契約状況 === "未契約" && r.契約状況 !== "未契約") return false;
+
+    // 単価レンジフィルター（契約事例のみ対象）
+    if (params.単価レンジ) {
+      const range = PRICE_RANGES.find(p => p.label === params.単価レンジ);
+      if (range) {
+        const price = priceOf(r);
+        if (price < 0) return false; // 金額なし（未契約など）は除外
+        if (price < range.min || price >= range.max) return false;
+      }
+    }
+
     return true;
   });
 }
@@ -37,15 +70,15 @@ function topN(arr: string[], n = 3): { label: string; count: number; pct: number
     if (!v || EXCLUDE_REASONS.has(v)) continue;
     map[v] = (map[v] ?? 0) + 1;
   }
-  const total = arr.filter(v => v && !EXCLUDE_REASONS.has(v)).length || 1;
+  const valid = arr.filter(v => v && !EXCLUDE_REASONS.has(v));
+  const total = valid.length || 1;
   return Object.entries(map)
     .sort((a, b) => b[1] - a[1])
     .slice(0, n)
     .map(([label, count]) => ({ label, count, pct: Math.round((count / total) * 100) }));
 }
 
-export function calcStats(allRows: CaseRow[], filtered: CaseRow[]): Stats {
-  void allRows;
+export function calcStats(_allRows: CaseRow[], filtered: CaseRow[]): Stats {
   const total = filtered.length;
   const contracted = filtered.filter(r => r.契約状況 && r.契約状況 !== "未契約").length;
   const contractRate = total > 0 ? Math.round((contracted / total) * 100) : 0;
@@ -81,7 +114,6 @@ export function getUniqueValues(rows: CaseRow[], key: keyof CaseRow): string[] {
   return Array.from(s).sort();
 }
 
-// CP名は固定リスト（その他は除外）
 export const CP_OPTIONS = [
   "ヒゲ総額",
   "ヒゲトライアル",
@@ -90,3 +122,5 @@ export const CP_OPTIONS = [
   "全身脱毛トライアル",
   "現金キャッシュバック",
 ];
+
+export const LEVEL_OPTIONS = ["初級編", "中級編", "上級編"];

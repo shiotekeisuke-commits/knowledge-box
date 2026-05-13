@@ -16,107 +16,160 @@ export type FeedbackData = {
   badCases: FBCase[];
 };
 
-// 会話テキストを行ごとに分割
+// ===== テキスト正規化 =====
+function normalize(text: string): string {
+  return text
+    .replace(/\r/g, "")           // Windows改行除去
+    .replace(/\u3000/g, " ")      // 全角スペース→半角
+    .replace(/^\s*[・•]\s*/gm, "") // 行頭の箇条書き記号除去
+    .replace(/[ \t]+/g, " ")      // 連続スペースを1つに
+    .trim();
+}
+
+// ===== 会話行のパース =====
 function parseDialogue(raw: string): DialogueLine[] {
   if (!raw) return [];
-
-  // 「スタッフ：」「お客様：」の前に改行を挿入して分割
-  const normalized = raw
-    .replace(/スタッフ[：:]/g, "\nスタッフ：")
-    .replace(/お客様[：:]/g, "\nお客様：")
-    .replace(/\r/g, "")
+  const lines = raw
+    .replace(/スタッフ\s*[：:]/g, "\nスタッフ：")
+    .replace(/お客様\s*[：:]/g, "\nお客様：")
     .split("\n")
     .map(l => l.trim())
     .filter(Boolean);
 
-  return normalized.map(line => {
-    if (line.startsWith("スタッフ：")) {
-      return { speaker: "staff" as const, text: line.replace(/^スタッフ[：:]/, "").trim() };
-    }
-    if (line.startsWith("お客様：")) {
-      return { speaker: "customer" as const, text: line.replace(/^お客様[：:]/, "").trim() };
-    }
+  return lines.map(line => {
+    if (/^スタッフ[：:]/.test(line))
+      return { speaker: "staff" as const, text: line.replace(/^スタッフ[：:]\s*/, "").trim() };
+    if (/^お客様[：:]/.test(line))
+      return { speaker: "customer" as const, text: line.replace(/^お客様[：:]\s*/, "").trim() };
     return { speaker: "other" as const, text: line };
   });
 }
 
-// フィールドをキーワードで分割して抽出
-function extractField(text: string, startKey: string, endKeys: string[]): string {
-  const startPattern = new RegExp(`${startKey}[：:]\\s*`);
-  const startIdx = text.search(startPattern);
-  if (startIdx === -1) return "";
-
-  const afterStart = text.slice(startIdx).replace(startPattern, "");
-
-  // 次のフィールドキーが来るまでを取得
-  let endIdx = afterStart.length;
-  for (const key of endKeys) {
-    const m = afterStart.search(new RegExp(`\\s*${key}[：:]`));
-    if (m !== -1 && m < endIdx) endIdx = m;
-  }
-
-  return afterStart.slice(0, endIdx).replace(/\r/g, "").trim();
-}
-
-const ALL_FIELD_KEYS = [
-  "タイトル", "発生場面", "会話再現",
-  "なぜ良いのか", "活用ポイント",
-  "何が問題だったか", "改善後の理想トーク例",
+// ===== フィールドキー一覧 =====
+const FIELD_KEYS = [
+  "タイトル",
+  "発生場面",
+  "会話再現",
+  "なぜ良いのか",
+  "活用ポイント",
+  "何が問題だったか",
+  "改善後の理想トーク例",
+  "改善後の理想トーク",
 ];
 
+// フィールド名の正規表現（全角スペースや空白を柔軟に許容）
+function fieldRegex(key: string) {
+  return new RegExp(`(?:^|\\n)\\s*${key}\\s*[：:]\\s*`, "m");
+}
+
+function extractField(text: string, key: string): string {
+  const re = fieldRegex(key);
+  const m = text.match(re);
+  if (!m || m.index === undefined) return "";
+
+  const after = text.slice(m.index + m[0].length);
+  // 次のフィールドキーが出るまでを取得
+  let end = after.length;
+  for (const k of FIELD_KEYS) {
+    if (k === key) continue;
+    const nm = after.match(fieldRegex(k));
+    if (nm && nm.index !== undefined && nm.index < end) end = nm.index;
+  }
+  return after.slice(0, end).replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// ===== 1件の事例をパース =====
 function parseCase(block: string, isGood: boolean): FBCase {
-  const title = extractField(block, "タイトル", ALL_FIELD_KEYS.filter(k => k !== "タイトル"));
-  const scene = extractField(block, "発生場面", ALL_FIELD_KEYS.filter(k => k !== "発生場面"));
-  const dialogueRaw = extractField(block, "会話再現", ALL_FIELD_KEYS.filter(k => k !== "会話再現"));
+  const text = normalize(block);
+
+  const title = extractField(text, "タイトル");
+  const scene = extractField(text, "発生場面");
+  const dialogueRaw = extractField(text, "会話再現");
   const reason = isGood
-    ? extractField(block, "なぜ良いのか", ALL_FIELD_KEYS.filter(k => k !== "なぜ良いのか"))
-    : extractField(block, "何が問題だったか", ALL_FIELD_KEYS.filter(k => k !== "何が問題だったか"));
+    ? extractField(text, "なぜ良いのか")
+    : extractField(text, "何が問題だったか");
   const point = isGood
-    ? extractField(block, "活用ポイント", ALL_FIELD_KEYS.filter(k => k !== "活用ポイント"))
-    : extractField(block, "改善後の理想トーク例", ALL_FIELD_KEYS.filter(k => k !== "改善後の理想トーク例"));
+    ? extractField(text, "活用ポイント")
+    : (extractField(text, "改善後の理想トーク例") || extractField(text, "改善後の理想トーク"));
+
+  // 会話フィールドが取れなかった場合はブロック内の会話を直接抽出
+  const dialogueSource = dialogueRaw ||
+    ((/スタッフ\s*[：:]/.test(text) || /お客様\s*[：:]/.test(text)) ? text : "");
 
   return {
     title,
     scene,
-    dialogue: parseDialogue(dialogueRaw),
+    dialogue: parseDialogue(dialogueSource),
     reason,
     point,
   };
 }
 
-export function parseFeedback(raw: string): FeedbackData {
-  if (!raw || raw.length < 30) return { goodCases: [], badCases: [] };
+// ===== セクションを事例ごとに分割 =====
+function splitCases(section: string, labelPattern: string): string[] {
+  const re = new RegExp(`【\\s*${labelPattern}\\s*事例[①②③④⑤1-5]\\s*】`, "g");
+  const markers = [...section.matchAll(re)];
+  if (markers.length === 0) {
+    // フォールバック: 【事例①】 形式（ラベルなし）
+    const re2 = /【\s*事例[①②③④⑤1-5]\s*】/g;
+    const m2 = [...section.matchAll(re2)];
+    if (m2.length > 0) {
+      return m2.map((m, i) => {
+        const start = (m.index ?? 0) + m[0].length;
+        const end = m2[i + 1]?.index ?? section.length;
+        return section.slice(start, end).trim();
+      });
+    }
+    return [];
+  }
+  return markers.map((m, i) => {
+    const start = (m.index ?? 0) + m[0].length;
+    const end = markers[i + 1]?.index ?? section.length;
+    return section.slice(start, end).trim();
+  });
+}
 
-  // \r を除去してから処理
-  const text = raw.replace(/\r/g, "");
+// ===== メインパース関数 =====
+export function parseFeedback(rawText: string): FeedbackData {
+  if (!rawText || rawText.length < 20) return { goodCases: [], badCases: [] };
 
-  // 良い点セクションと悪い点セクションを分割
-  const goodSectionStart = text.search(/■\s*共有推奨の[「『]良い点[」』]/);
-  const badSectionStart = text.search(/■\s*共有推奨の[「『]悪い点/);
+  const text = rawText.replace(/\r/g, "").replace(/\u3000/g, " ");
 
-  const goodSection = goodSectionStart !== -1
-    ? text.slice(goodSectionStart, badSectionStart !== -1 ? badSectionStart : undefined)
-    : "";
-  const badSection = badSectionStart !== -1
-    ? text.slice(badSectionStart)
-    : "";
+  // セクション分割（複数パターンに対応）
+  const goodStart = text.search(/■\s*(?:共有推奨の)?[「『]?良い点[」』]?/);
+  const badStart  = text.search(/■\s*(?:共有推奨の)?[「『]?悪い点/);
 
-  // 各セクションを事例ごとに分割
-  function splitCases(section: string, label: string): string[] {
-    const markers = [...section.matchAll(new RegExp(`【${label}\\s*事例[①②③④⑤]】`, "g"))];
-    if (markers.length === 0) return [];
-    return markers.map((m, i) => {
-      const start = (m.index ?? 0) + m[0].length;
-      const end = markers[i + 1]?.index ?? section.length;
-      return section.slice(start, end).trim();
-    });
+  let goodSection = "";
+  let badSection  = "";
+
+  if (goodStart !== -1 && badStart !== -1) {
+    goodSection = text.slice(goodStart, badStart);
+    badSection  = text.slice(badStart);
+  } else if (goodStart !== -1) {
+    goodSection = text.slice(goodStart);
+  } else if (badStart !== -1) {
+    badSection  = text.slice(badStart);
+  } else {
+    // セクション区切りなし → 【良い点/悪い点 事例】マーカーで分ける
+    const allGood = [...text.matchAll(/【\s*良い点\s*事例[①②③④⑤]\s*】/g)];
+    const allBad  = [...text.matchAll(/【\s*悪い点\s*事例[①②③④⑤]\s*】/g)];
+    if (allGood.length > 0 || allBad.length > 0) {
+      const firstBad = allBad[0]?.index ?? text.length;
+      goodSection = text.slice(0, firstBad);
+      badSection  = text.slice(firstBad);
+    }
   }
 
   const goodBlocks = splitCases(goodSection, "良い点");
-  const badBlocks = splitCases(badSection, "悪い点");
+  const badBlocks  = splitCases(badSection,  "悪い点");
+
+  // 簡易フォーマット（【事例①】形式）フォールバック
+  const fallbackBlocks = splitCases(text, "");
 
   return {
-    goodCases: goodBlocks.map(b => parseCase(b, true)),
+    goodCases: goodBlocks.length > 0
+      ? goodBlocks.map(b => parseCase(b, true))
+      : fallbackBlocks.map(b => parseCase(b, true)),
     badCases: badBlocks.map(b => parseCase(b, false)),
   };
 }
